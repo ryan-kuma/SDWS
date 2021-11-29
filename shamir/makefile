@@ -1,11 +1,11 @@
 .PHONY: all clean 
 CC=gcc
 LDLIBS=-lsss
-CFLAG=-Wall -g -I/home/ryan/test/cryptoTest
+CFLAGS=-Wall -g -I/home/ryan/test/cryptoTest/SDWS/shamir/sss
 BIN=2test
 all:$(BIN)
 %.o:%.c 
-	$(CC) -c $(CFLAG) $^ -o $@
+	$(CC) -c $(CFLAGS) $^ -o $@
 clean:
 	rm -rf *.o $(BIN)
 

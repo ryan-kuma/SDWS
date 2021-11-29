@@ -1,0 +1,3 @@
+[submodule "shamir/sss"]
+	path = shamir/sss
+	url = git@github.com:dsprenkels/sss.git
