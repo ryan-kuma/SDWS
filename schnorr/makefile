@@ -1,10 +1,11 @@
 .PHONY: all clean
-BIN=kk
+BIN=key
 CC=gcc
-CFLAGS=-Wall -g -I/home/ryan/workspace/secp256k1/include
-LDLIBS=-lsecp256k1
+CXX=g++
+CXXFLAGS=-Wall -g 
+LDLIBS=-lcryptopp
 all:$(BIN)
-%.c:%.o
-	$(CC) -c $(CFLAGS) $^ -o $@ $(LDLIBS) 
+%.cpp:%.o
+	$(CXX) -c $(CXXFLAGS) $^ -o $@ $(LDLIBS) 
 clean:
 	rm -rf *.o $(BIN)

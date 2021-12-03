@@ -1,11 +1,13 @@
 .PHONY: all clean 
 CC=gcc
-LDLIBS=-lsss
-CFLAGS=-Wall -g -I/home/ryan/test/cryptoTest/SDWS/shamir/sss
-BIN=2test
+CXX=g++
+LDLIBS=-lcryptopp
+CFLAGS=-Wall -g
+CXXFLAGS=-Wall -g
+BIN=secretShare
 all:$(BIN)
-%.o:%.c 
-	$(CC) -c $(CFLAGS) $^ -o $@
+%.o:%.cpp 
+	$(CXX) -c $(CXXFLAGS) $^ -o $@
 clean:
 	rm -rf *.o $(BIN)
 
