@@ -13,7 +13,7 @@ static Integer maxp("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD
 
 Integer calculate_Y(int x, vector<Integer> &poly)
 {
-	Integer y("0");
+	Integer y(Integer::Zero());
 	Integer temp("1");
 	for (auto coeff : poly) {
 		y = (y + (coeff * temp));
@@ -73,8 +73,8 @@ int main()
 	Integer S(prng, Integer::One(), maxp);
 	Integer b(prng, Integer::One(), maxp);
 
-	int N = 100;
-	int K = 20;
+	int N = 10;
+	int K = 4;
 	cout<<"start="<<S*b%maxp<<endl;
 	cout<<"------------------------------------"<<endl;
 

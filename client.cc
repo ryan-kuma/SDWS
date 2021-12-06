@@ -3,6 +3,8 @@
 #include "muduo/net/EventLoop.h"
 #include "muduo/net/TcpClient.h"
 
+#include "json.hpp"
+
 #include <stdio.h>
 #include <iostream>
 
@@ -43,7 +45,6 @@ private:
 			if (tcpNoDelay_)
 				conn->setTcpNoDelay(true);
 			conn_ = conn;
-			send();
 		}
 		else 
 		{
@@ -52,18 +53,18 @@ private:
 	
 	}
 
-	void send()
+	void send(const string &message)
 	{
 		Timestamp now(Timestamp::now());
-		Buffer requests;
-		
-		char buf[256] = "this is client";
-		int32_t len = strlen(buf);
-		requests.append(buf, len);
+		Buffer response;
+
+		int32_t len = message.size();	
+		response.append(message.c_str(), len);
+
 		int32_t be32 = muduo::net::sockets::hostToNetwork32(len);
 
-		requests.prepend(&be32, sizeof(be32));
-		conn_->send(&requests);
+		response.prepend(&be32, sizeof(be32));
+		conn_->send(&response);
 	}
 
 	void onMessage(const TcpConnectionPtr& conn, Buffer *buf, Timestamp recvTime)
@@ -82,21 +83,42 @@ private:
 			{
 				buf->retrieve(sizeof(int32_t));
 				muduo::string message(buf->peek(), len);
-cout<<"message="<<message<<endl;
 				buf->retrieve(len);
-				if (message == "end")  {
-					if (times > 0)  
+				
+
+				//get complete msg
+				cout<<"message="<<message<<endl;
+				nlohmann::json j = nlohmann::json::parse(message); 
+				int type = j["type"];
+				switch(type)
+				{
+					//get revocation_point_x, per_commit_secret, xi, revocation_secret_piece
+					case 1:
 					{
-						send();
-						times--;
+						string str_revocation_point_x = j["rpoint_x"].get<string>();
+						string str_per_commit_secret = j["psecret_piece"].get<string>();
+						int xi = j["x_i"].get<int>();
+						string str_rpiece = j["rsecret_piece"].get<string>();
+
+						cout<<"rpointx="<<str_revocation_point_x<<endl;
+						cout<<"psecret="<<str_per_commit_secret<<endl;
+						cout<<"xi="<<xi<<endl;
+						cout<<"rpiece="<<str_rpiece<<endl;
+						
+						nlohmann::json jsdic;
+						jsdic["type"] = "1";
+						string msg = jsdic.dump();
+						send(msg);
 					}
-					else
-					{
-					printf("shutdown\n");
-						conn->shutdown();
-						break;
-					}
+					break;
+					case 2:
+					break;
+					default:
+					break;
 				}
+
+				conn->shutdown();
+
 			}
 			else
 			{

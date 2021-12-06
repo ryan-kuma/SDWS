@@ -12,6 +12,8 @@
 #include "cryptopp/hex.h"
 #include "cryptopp/sha.h"
 
+#include "json.hpp"
+
 #include <sstream>
 #include <utility>
 #include <stdio.h>
@@ -105,7 +107,26 @@ private:
 //send revocation_point_x, x_i, revocation_secret_piece and per_commit_secret when client connected
 	void onConnection(const TcpConnectionPtr& conn)
 	{
+		nlohmann::json jsdic;
+		jsdic["type"] = 1;
 
+		ostringstream oss("");
+		oss<<revocation_point.x;
+		string str_revocation_point_x = oss.str();
+		oss.str("");
+		oss<<per_commit_secret;
+		string str_per_commit_secret = oss.str();
+		oss.str("");
+
+		jsdic["rpoint_x"] = str_revocation_point_x;
+		jsdic["psecret_piece"] = str_per_commit_secret;
+		jsdic["x_i"] = 1;
+		jsdic["rsecret_piece"] = revocation_secret_piece[0];
+
+		string msg = jsdic.dump();
+
+		//send msg
+		processRequest(conn, msg);
 	}
 
 	void onMessage(const TcpConnectionPtr& conn, Buffer* buf, Timestamp)
@@ -126,6 +147,33 @@ private:
 				muduo::string message(buf->peek(), len);
 				buf->retrieve(len);
 cout<<"message="<<message<<endl;				
+
+				nlohmann::json j = nlohmann::json::parse(message);	
+				int type = j["type"];
+
+				switch(type)
+				{
+					//send ctx
+					case 1:
+					{
+					
+					}
+					break;
+
+					case 2:
+					{
+					
+					}
+					break;
+					case 3:
+					{
+					
+					}
+					break;
+					default:
+					break;
+				}
+
 				processRequest(conn, message);
 			}
 			else
@@ -140,11 +188,10 @@ cout<<"message="<<message<<endl;
 	{
 		bool goodRequest = true;
 
-		char buf[256] = "end";
-		int32_t len = strlen(buf);
+		int32_t len = request.size();
 
 		Buffer response;
-		response.append(buf, len);
+		response.append(request.c_str(), len);
 		int32_t be32 = muduo::net::sockets::hostToNetwork32(len);
 		response.prepend(&be32, sizeof(be32));
 

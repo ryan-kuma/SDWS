@@ -13,7 +13,7 @@ static Integer maxp("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD
 
 Integer calculate_Y(int x, vector<Integer> &poly)
 {
-	Integer y("0");
+	Integer y(Integer::Zero());
 	Integer temp("1");
 	for (auto coeff : poly) {
 		y = (y + (coeff * temp));
@@ -72,8 +72,8 @@ int main()
 	AutoSeededRandomPool prng;
 	Integer S(prng, Integer::One(), maxp);
 
-	int N = 10;
-	int K = 4;
+	int N = 100;
+	int K = 40;
 	cout<<"start="<<S<<endl;
 	cout<<"------------------------------------"<<endl;
 
@@ -82,7 +82,9 @@ int main()
 	for (int i = 0; i < N; i++)
 		cout<<"points"<<i<<"=   "<<points[i]<<endl;
 	
-	int x[K] = {1, 2, 3, 4};
+	int x[K]; 
+	for (int i = 1; i <= K; i++)
+		x[i-1] = i;
 	Integer res = generateSecret(&x[0], points, K);
 
 	cout<<"res="<<res<<endl;

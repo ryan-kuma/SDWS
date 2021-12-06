@@ -4,7 +4,8 @@ CXX=g++
 LDLIBS=-lcryptopp
 CFLAGS=-Wall -g
 CXXFLAGS=-Wall -g
-BIN=secretShare
+#BIN=byteshare integerShare
+BIN=multiShare
 all:$(BIN)
 %.o:%.cpp 
 	$(CXX) -c $(CXXFLAGS) $^ -o $@
