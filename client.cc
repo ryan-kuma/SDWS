@@ -4,9 +4,12 @@
 #include "muduo/net/TcpClient.h"
 
 #include <stdio.h>
+#include <iostream>
 
 using namespace muduo;
 using namespace muduo::net;
+
+using namespace std;
 
 class Client
 {
@@ -79,7 +82,7 @@ private:
 			{
 				buf->retrieve(sizeof(int32_t));
 				muduo::string message(buf->peek(), len);
-
+cout<<"message="<<message<<endl;
 				buf->retrieve(len);
 				if (message == "end")  {
 					if (times > 0)  
@@ -89,6 +92,7 @@ private:
 					}
 					else
 					{
+					printf("shutdown\n");
 						conn->shutdown();
 						break;
 					}
@@ -110,14 +114,23 @@ private:
 
 int main(int argc, char **argv)
 {
-	bool nodelay = true;
-	InetAddress srvaddr("127.0.0.1", 10358);
+	if (argc > 2)
+	{
+		bool nodelay = true;
+		int port = static_cast<int>(atoi(argv[2]));
+//		port = 12358;  //default port
+		InetAddress srvaddr(argv[1], port);
 
-	EventLoop loop;
-	Client *client = new Client(&loop, srvaddr, "client", nodelay);
-	client->connect();
-	
-	loop.loop();
+		EventLoop loop;
+		Client *client = new Client(&loop, srvaddr, "client", nodelay);
+		client->connect();
+		
+		loop.loop();
+	}
+	else
+	{
+		printf("%s server_ip port\n", argv[0]);
+	}
 }
 
 

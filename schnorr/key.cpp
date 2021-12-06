@@ -48,11 +48,11 @@ int main(int argc, char *argv[])
 	string str_per_commit_point = oss.str();
 	oss.str("");
 
-//	std::cout<<str_revocation_point<<endl;
-//	cout<<hex<<revocation_point_y<<endl;
-//	cout<<per_commit_point_x<<endl;
-//	cout<<per_commit_secret.ByteCount()<<endl;
-//	cout<<n.ByteCount()<<endl;
+	std::cout<<str_revocation_point<<endl;
+	cout<<hex<<revocation_point_y<<endl;
+	cout<<per_commit_point_x<<endl;
+	cout<<per_commit_secret.ByteCount()<<endl;
+	cout<<n.ByteCount()<<endl;
 	
 	SHA256 hash;
 	string hash_revocation_percommit;
