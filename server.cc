@@ -36,8 +36,8 @@ class Server
 public:
 	Server(EventLoop* loop, const InetAddress& listenAddr, int n, int k)
 	: server_(loop, listenAddr, "server"),revocation_secret_piece(n),piece_n(n),piece_k(k),
-		maxp("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141"),
-		startTime_(Timestamp::now())
+		maxp("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141"),vec_x(0),
+		startTime_(Timestamp::now()), vec_ri(0), vec_Ri(0)
 	{
 		server_.setConnectionCallback(
 			std::bind(&Server::onConnection, this, _1));
@@ -46,7 +46,6 @@ public:
 
 
 		AutoSeededRandomPool prng;
-		GroupParameters group;
 		group.Initialize(ASN1::secp256k1());
 //generate random secret
 		revocation_secret = Integer(prng, Integer::One(), maxp);
@@ -57,6 +56,41 @@ public:
 		per_commit_point = group.ExponentiateBase(per_commit_secret);
 	
 		secret_sharing(revocation_secret, revocation_secret_piece);
+		
+//generate revocation_public_key and revocation_private_key
+		ostringstream oss;
+		oss<<hex<<revocation_point.x;
+		string str_revocation_point_x = oss.str();
+		oss.str("");
+		oss<<hex<<per_commit_point.x;
+		string str_per_commit_point_x = oss.str();
+		oss.str("");
+		
+		SHA256 hash;
+		string hash_revocation_percommit;
+		string hash_percommit_revocation;
+
+		StringSource s1(str_revocation_point_x+str_per_commit_point_x, true, new HashFilter(hash, new HexEncoder(new StringSink(hash_revocation_percommit))));
+		StringSource s2(str_per_commit_point_x+str_revocation_point_x, true, new HashFilter(hash, new HexEncoder(new StringSink(hash_percommit_revocation))));
+
+		Integer num_hash_revocation_percommit(hash_revocation_percommit.c_str());
+		Integer num_hash_percommit_revocation(hash_percommit_revocation.c_str());
+
+		Element v1 = group.GetCurve().ScalarMultiply(revocation_point, num_hash_revocation_percommit);
+		Element v2 = group.GetCurve().ScalarMultiply(per_commit_point, num_hash_percommit_revocation);
+
+		revocation_pubkey_point = group.GetCurve().Add(v1,v2);
+		revocation_prikey = revocation_secret * num_hash_revocation_percommit + per_commit_secret * num_hash_percommit_revocation;
+
+//simulate generate random rj and rj*G
+		for (int i = 0; i < n; i++)
+		{
+			Integer tmp_ri(prng, Integer::One(), maxp);	
+			Element tmp_Ri = group.ExponentiateBase(tmp_ri);
+
+			vec_ri.push_back(tmp_ri);
+			vec_Ri.push_back(tmp_Ri);
+		}
 
 	}
 
@@ -117,11 +151,15 @@ private:
 		oss<<per_commit_secret;
 		string str_per_commit_secret = oss.str();
 		oss.str("");
+		oss<<revocation_pubkey_point.x;
+		string str_revocation_pubkey_point_x = oss.str();
+		oss.str("");
 
 		jsdic["rpoint_x"] = str_revocation_point_x;
 		jsdic["psecret_piece"] = str_per_commit_secret;
 		jsdic["x_i"] = 1;
 		jsdic["rsecret_piece"] = revocation_secret_piece[0];
+		jsdic["rpubkey_x"] = str_revocation_pubkey_point_x;
 
 		string msg = jsdic.dump();
 
@@ -153,10 +191,56 @@ cout<<"message="<<message<<endl;
 
 				switch(type)
 				{
-					//send ctx
+					//send rtx
 					case 1:
 					{
-					
+						//store array of xi and Sum of Ri
+						if (static_cast<int>(vec_x.size()) < piece_k) 
+						{
+							vec_x.push_back(j["xi"].get<int>());
+							Integer Ri_x(j["Ri_x"].get<string>().c_str());
+							Integer Ri_y(j["Ri_y"].get<string>().c_str());
+
+							Element Ri = ECP::Point(Ri_x, Ri_y);
+							if (vec_x.size() == 1)
+							{
+								R_sum = Ri;
+							}else {
+								Element R_add = group.GetCurve().Add(R_sum, Ri);
+								R_sum = R_add;
+							}
+
+						} 
+						//simulate multiple peer
+						for (int i = 0; i < piece_k -1; i++)
+						{
+							vec_x.push_back(i+2);
+							Element R_add = group.GetCurve().Add(R_sum, vec_Ri[i]);
+							R_sum = R_add;
+						}
+
+						if (static_cast<int>(vec_x.size()) >= piece_k){
+						//send rtx Rsum and array of xi when receive complete
+							nlohmann::json jsdic;	
+							jsdic["type"] = 2;
+
+							AutoSeededRandomPool prng;
+							Integer rtx(prng, Integer::One(), maxp);	
+							ostringstream oss("");
+							oss<<rtx;
+							jsdic["rtx"] = oss.str();
+							oss.str("");
+							oss<<R_sum.x;
+							jsdic["R_sum_x"] = oss.str();
+							oss.str("");
+
+							jsdic["vec_x"] = vec_x;
+							
+							string msg = jsdic.dump();
+							processRequest(conn, msg);
+
+							vec_x.clear();
+						}
 					}
 					break;
 
@@ -174,7 +258,7 @@ cout<<"message="<<message<<endl;
 					break;
 				}
 
-				processRequest(conn, message);
+//				processRequest(conn, message);
 			}
 			else
 			{
@@ -209,7 +293,16 @@ cout<<"message="<<message<<endl;
 	int piece_n;
 	int piece_k;
 	Integer maxp;
+	vector<int> vec_x;
+	Element R_sum;
+	GroupParameters group;
 	Timestamp startTime_;
+
+	Element revocation_pubkey_point 
+	Integer revocation_prikey;
+	//simulata
+	vector<Integer> vec_ri;
+	vector<Element> vec_Ri;
 };
 
 int main(int argc, char **argv)

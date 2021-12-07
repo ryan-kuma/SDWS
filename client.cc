@@ -3,15 +3,30 @@
 #include "muduo/net/EventLoop.h"
 #include "muduo/net/TcpClient.h"
 
+#include "cryptopp/integer.h"
+#include "cryptopp/eccrypto.h"
+#include "cryptopp/osrng.h"
+#include "cryptopp/oids.h"
+#include "cryptopp/cryptlib.h"
+#include "cryptopp/hex.h"
+#include "cryptopp/sha.h"
+
 #include "json.hpp"
 
 #include <stdio.h>
 #include <iostream>
+#include <sstream>
+#include <string>
 
 using namespace muduo;
 using namespace muduo::net;
 
+using namespace CryptoPP;
+
 using namespace std;
+
+typedef DL_GroupParameters_EC<ECP> GroupParameters;
+typedef DL_GroupParameters_EC<ECP>::Element Element;
 
 class Client
 {
@@ -22,14 +37,16 @@ public:
 			bool nodelay)
 		: name_(name),
 		tcpNoDelay_(nodelay),
-		client_(loop, srvaddr, name_)
+		client_(loop, srvaddr, name_),
+		maxp("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141")
 	{
 		client_.setConnectionCallback(
 			std::bind(&Client::onConnection, this, _1));
 		client_.setMessageCallback(
 			std::bind(&Client::onMessage, this, _1, _2, _3));
 
-		times = 3;
+		group.Initialize(ASN1::secp256k1());
+
 	}
 
 	void connect()
@@ -99,19 +116,81 @@ private:
 						string str_per_commit_secret = j["psecret_piece"].get<string>();
 						int xi = j["x_i"].get<int>();
 						string str_rpiece = j["rsecret_piece"].get<string>();
+						string str_revocationpubkey = j["rpubkey_x"].get<string>();
 
-						cout<<"rpointx="<<str_revocation_point_x<<endl;
-						cout<<"psecret="<<str_per_commit_secret<<endl;
-						cout<<"xi="<<xi<<endl;
-						cout<<"rpiece="<<str_rpiece<<endl;
+						this->revocation_secret_piece = Integer(str_rpiece.c_str());
+						this->x_i = xi;
+						this->revocation_point_x = Integer(str_revocation_point_x.c_str());
+						this->per_commit_secret = Integer(str_per_commit_secret.c_str());
+						this->revocation_pubkey = Integer(str_revocationpubkey.c_str());
+
+						cout<<"rpointx="<<revocation_point_x<<endl;
+						cout<<"psecret="<<per_commit_secret<<endl;
+						cout<<"xi="<<x_i<<endl;
+						cout<<"rpiece="<<revocation_secret_piece<<endl;
+						cout<<"rpubkey="<<revocation_pubkey<<endl;
+
+						AutoSeededRandomPool prng;
+						
+
+						this->r_i = Integer(prng, Integer::One(), maxp);
+						this->R_i_point = group.ExponentiateBase(this->r_i);
+
 						
 						nlohmann::json jsdic;
-						jsdic["type"] = "1";
+						jsdic["type"] = 1;
+						jsdic["xi"] = xi;
+
+						ostringstream oss("");
+						oss<<R_i_point.x;
+						jsdic["Ri_x"] = oss.str();
+						oss.str("");
+						oss<<R_i_point.y;
+						jsdic["Ri_y"] = oss.str();
+						oss.str("");
+
 						string msg = jsdic.dump();
 						send(msg);
 					}
 					break;
 					case 2:
+					{
+						string str_rtx = j["rtx"].get<string>();
+						string str_sum_R = j["R_sum_x"].get<string>();
+						vector<int> x_vec = j["vec_x"].get<vector<int>>();
+						
+						Integer rtx(str_rtx);
+						Integer sum_R(str_sum_R);
+
+						//generate per_commit_point = per_commit_secrete * G
+						Element per_commit_point = group.ExponentiateBase(per_commit_secret);
+
+						ostringstream oss("");
+						oss<<hex<<revocation_point_x;
+						string str_revocation_point_x = oss.str();
+						oss.str("");
+						oss<<hex<<per_commit_point.x;
+						string str_per_commit_point_x = oss.str();;
+						oss.str("");
+
+						//RPri_j = RSec_j * hash(Rpoint_x || Psec * G);
+						SHA256 hash;
+						string hash_revocation_percommit;
+						StringSource s1(str_revocation_point_x+str_per_commit_point_x, true, new HashFilter(hash, new HexEncoder(new StringSink(hash_revocation_percommit))));
+
+						Integer num_hash_revocaion_percommit(str_revocation_percommit.c_str());
+
+						Integer revocation_pri_piece = revocation_secret_piece * num_hash_revocation_percommit;
+
+						// generate e by hash(R_sum||Rpub||rtx)
+
+					
+					}
+					break;
+					case 3:
+					{
+					
+					}
 					break;
 					default:
 					break;
@@ -131,7 +210,19 @@ private:
 	const bool tcpNoDelay_;
 	TcpClient client_;
 	TcpConnectionPtr conn_;
-	int times;
+	Integer maxp;
+	GroupParameters group;
+
+	Integer revocation_secret_piece;
+	int x_i;
+	Integer r_i;
+	Element R_i_point;
+	Integer revocation_point_x;
+	Integer per_commit_secret;
+	Integer revocation_prikey_piece;
+
+	Integer revocation_hash_e;
+	Integer revocation_pubkey;
 };
 
 int main(int argc, char **argv)
