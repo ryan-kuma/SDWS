@@ -43,26 +43,31 @@ void secret_sharing(Integer S, vector<Integer> &points, int N, int K)
 	}
 }
 
-Integer generateSecret(int* x, vector<Integer> &y, int M)
+Integer generateSecret(int* x, vector<Integer> &y, int M, Integer c)
 {
 	Integer ans = Integer::Zero();
-	Integer ans_dens = Integer::One();
+//	Integer ans_dens = Integer::One();
 	for (int i = 0; i < M; i++)
 	{
 		Integer l = y[i];
-		Integer l_dens = Integer::One();
+//		Integer l_dens = Integer::One();
+	int l_dens = 1;
 		for (int j = 0; j < M; j++)
 		{
 			if (j == i)
 				continue;
 			l = l * x[j];
-			l_dens = l_dens * (x[i]-x[j]);
+			l_dens = l_dens * (x[j]-x[i]);
 		}
-		ans = ans * l_dens - l * ans_dens;
-		ans_dens = ans_dens * l_dens;
+
+		l = l / Integer(l_dens);
+		ans = ans + l;
+//		ans = ans * l_dens - l * ans_dens;
+//		ans_dens = ans_dens * l_dens;
 	}
 
-	ans = ans / ans_dens;
+//	ans = ans / ans_dens;
+	ans = ans + c*Integer(4);
 	ans = ans % maxp;
 	return ans;
 }
@@ -72,10 +77,11 @@ int main()
 	AutoSeededRandomPool prng;
 	Integer S(prng, Integer::One(), maxp);
 	Integer b(prng, Integer::One(), maxp);
+	Integer c(prng, Integer::One(), maxp);
 
 	int N = 10;
 	int K = 4;
-	cout<<"start="<<S*b%maxp<<endl;
+	Integer start = (S*b+ c * Integer(K))%maxp ;
 	cout<<"------------------------------------"<<endl;
 
 	vector<Integer> points(N);
@@ -83,15 +89,16 @@ int main()
 	for (int i = 0; i < N; i++)
 	{
 		cout<<"points"<<i<<"=   "<<points[i]<<endl;
-		points[i] = points[i] * b % maxp;
+		points[i] = (points[i] * b) % maxp;
 	}
 	
 	int x[K]; 
 	for (int i = 1; i <= K; i++)
 		x[i-1] = i;
-	Integer res = generateSecret(&x[0], points, K);
+	Integer res = generateSecret(&x[0], points, K, c);
 
-	cout<<"res="<<res<<endl;
+	cout<<"  res="<<res<<endl;
+	cout<<"start="<<start<<endl;
 
 	return 0;
 }

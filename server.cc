@@ -37,7 +37,7 @@ public:
 	Server(EventLoop* loop, const InetAddress& listenAddr, int n, int k)
 	: server_(loop, listenAddr, "server"),revocation_secret_piece(n),piece_n(n),piece_k(k),
 		maxp("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141"),vec_x(0),
-		startTime_(Timestamp::now()), vec_ri(0), vec_Ri(0)
+		startTime_(Timestamp::now()), vec_ri(n), vec_Ri(n), vec_sj(n)
 	{
 		server_.setConnectionCallback(
 			std::bind(&Server::onConnection, this, _1));
@@ -73,8 +73,8 @@ public:
 		StringSource s1(str_revocation_point_x+str_per_commit_point_x, true, new HashFilter(hash, new HexEncoder(new StringSink(hash_revocation_percommit))));
 		StringSource s2(str_per_commit_point_x+str_revocation_point_x, true, new HashFilter(hash, new HexEncoder(new StringSink(hash_percommit_revocation))));
 
-		Integer num_hash_revocation_percommit(hash_revocation_percommit.c_str());
-		Integer num_hash_percommit_revocation(hash_percommit_revocation.c_str());
+		num_hash_revocation_percommit = Integer(hash_revocation_percommit.c_str());
+		num_hash_percommit_revocation = Integer(hash_percommit_revocation.c_str());
 
 		Element v1 = group.GetCurve().ScalarMultiply(revocation_point, num_hash_revocation_percommit);
 		Element v2 = group.GetCurve().ScalarMultiply(per_commit_point, num_hash_percommit_revocation);
@@ -83,13 +83,13 @@ public:
 		revocation_prikey = revocation_secret * num_hash_revocation_percommit + per_commit_secret * num_hash_percommit_revocation;
 
 //simulate generate random rj and rj*G
-		for (int i = 0; i < n; i++)
+		for (int i = 1; i < n; i++)
 		{
 			Integer tmp_ri(prng, Integer::One(), maxp);	
 			Element tmp_Ri = group.ExponentiateBase(tmp_ri);
 
-			vec_ri.push_back(tmp_ri);
-			vec_Ri.push_back(tmp_Ri);
+			vec_ri[i] = tmp_ri;
+			vec_Ri[i] = tmp_Ri;
 		}
 
 	}
@@ -212,9 +212,9 @@ cout<<"message="<<message<<endl;
 
 						} 
 						//simulate multiple peer
-						for (int i = 0; i < piece_k -1; i++)
+						for (int i = 1; i < piece_k; i++)
 						{
-							vec_x.push_back(i+2);
+							vec_x.push_back(i+1);
 							Element R_add = group.GetCurve().Add(R_sum, vec_Ri[i]);
 							R_sum = R_add;
 						}
@@ -228,16 +228,53 @@ cout<<"message="<<message<<endl;
 							Integer rtx(prng, Integer::One(), maxp);	
 							ostringstream oss("");
 							oss<<rtx;
-							jsdic["rtx"] = oss.str();
+							string str_rtx = oss.str();
+							jsdic["rtx"] = str_rtx;
 							oss.str("");
 							oss<<R_sum.x;
-							jsdic["R_sum_x"] = oss.str();
+							string str_R_sum = oss.str();
+							jsdic["R_sum_x"] = str_R_sum; 
 							oss.str("");
 
 							jsdic["vec_x"] = vec_x;
 							
 							string msg = jsdic.dump();
 							processRequest(conn, msg);
+
+
+							//simulate generate sj-----------------------------
+							SHA256 hash;
+							string str_hash_e;
+
+							oss<<revocation_pubkey_point.x;
+							string str_revocation_pubkey_point_x = oss.str();
+							oss.str("");
+
+							StringSource s1(str_R_sum + str_revocation_pubkey_point_x + str_rtx, true, new HashFilter(hash, new HexEncoder(new StringSink(str_hash_e))));
+
+							hash_e = Integer(str_hash_e.c_str()); 
+							for (int j = 1; j < piece_k; j++)
+							{ 
+								int x_i = vec_x[j];
+								Integer revocation_piece(revocation_secret_piece[x_i].c_str());
+								Integer revocation_pri_piece = revocation_piece * num_hash_revocation_percommit;
+								
+								Integer mul_piece = revocation_pri_piece;
+								Integer mul_dens = Integer::One();
+								for (vector<int>::iterator iter = vec_x.begin(); iter != vec_x.end(); iter++)
+								{
+									int x = *iter;
+									if (x == x_i)
+										continue;
+
+									mul_piece = mul_piece * Integer(x);
+									mul_dens = mul_dens * Integer(x-x_i);
+								
+								}
+								mul_piece = mul_piece / mul_dens;
+								Integer s_j = vec_ri[x_i] + (hash_e * mul_piece) % maxp;
+								vec_sj[j] = s_j;
+							}
 
 							vec_x.clear();
 						}
@@ -246,12 +283,18 @@ cout<<"message="<<message<<endl;
 
 					case 2:
 					{
-					
-					}
-					break;
-					case 3:
-					{
-					
+						int xi = j["x_i"].get<int>();
+						string str_si = j["s_i"].get<string>();
+						Integer si(str_si.c_str());
+
+						Integer sum_s = si; 
+						for (int i = 1; i < piece_k; i++)
+							sum_s = sum_s + vec_sj[i];
+
+						sum_s = sum_s % maxp;
+						Integer res_s = sum_s + hash_e * per_commit_secret *  num_hash_percommit_revocation;
+						cout<<"-----------------------------end-------------------------"<<endl;
+						cout<<"res_s="<<res_s<<endl;
 					}
 					break;
 					default:
@@ -298,11 +341,16 @@ cout<<"message="<<message<<endl;
 	GroupParameters group;
 	Timestamp startTime_;
 
-	Element revocation_pubkey_point 
+	Integer num_hash_revocation_percommit;
+	Integer num_hash_percommit_revocation;
+
+	Element revocation_pubkey_point; 
 	Integer revocation_prikey;
+	Integer hash_e;
 	//simulata
 	vector<Integer> vec_ri;
 	vector<Element> vec_Ri;
+	vector<Integer> vec_sj;
 };
 
 int main(int argc, char **argv)

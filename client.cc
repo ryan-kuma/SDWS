@@ -122,7 +122,7 @@ private:
 						this->x_i = xi;
 						this->revocation_point_x = Integer(str_revocation_point_x.c_str());
 						this->per_commit_secret = Integer(str_per_commit_secret.c_str());
-						this->revocation_pubkey = Integer(str_revocationpubkey.c_str());
+						this->revocation_pubkey = str_revocationpubkey;
 
 						cout<<"rpointx="<<revocation_point_x<<endl;
 						cout<<"psecret="<<per_commit_secret<<endl;
@@ -156,12 +156,10 @@ private:
 					case 2:
 					{
 						string str_rtx = j["rtx"].get<string>();
-						string str_sum_R = j["R_sum_x"].get<string>();
+						string str_R_sum = j["R_sum_x"].get<string>();
 						vector<int> x_vec = j["vec_x"].get<vector<int>>();
 						
-						Integer rtx(str_rtx);
-						Integer sum_R(str_sum_R);
-
+						
 						//generate per_commit_point = per_commit_secrete * G
 						Element per_commit_point = group.ExponentiateBase(per_commit_secret);
 
@@ -178,17 +176,47 @@ private:
 						string hash_revocation_percommit;
 						StringSource s1(str_revocation_point_x+str_per_commit_point_x, true, new HashFilter(hash, new HexEncoder(new StringSink(hash_revocation_percommit))));
 
-						Integer num_hash_revocaion_percommit(str_revocation_percommit.c_str());
+						Integer num_hash_revocaion_percommit(hash_revocation_percommit.c_str());
 
-						Integer revocation_pri_piece = revocation_secret_piece * num_hash_revocation_percommit;
+						Integer revocation_pri_piece = revocation_secret_piece *  num_hash_revocaion_percommit;
 
 						// generate e by hash(R_sum||Rpub||rtx)
+						string str_revocation_hash_e;
+						StringSource s2(str_R_sum + revocation_pubkey + str_rtx, true, new HashFilter(hash, new HexEncoder(new StringSink(str_revocation_hash_e))));
 
-					
+						Integer revocation_hash_e(str_revocation_hash_e.c_str());
+
+						//generate s_j = r_j + e * RRri_j * multi(x_k/(x_k-x_j))
+						Integer mul_piece = revocation_pri_piece;
+						Integer mul_dens = Integer::One();
+						for (vector<int>::iterator iter = x_vec.begin(); iter != x_vec.end(); iter++)
+						{
+							int x = *iter;
+							if (x = x_i)
+								continue;
+								
+							mul_piece = mul_piece * x;
+							mul_dens = mul_dens * (x - x_i);
+						}
+						mul_piece = mul_piece / mul_dens;
+						
+						Integer s_i = r_i + (revocation_hash_e * mul_piece) % maxp;
+
+						nlohmann::json jsdic;
+						jsdic["type"] = 2;
+						jsdic["xi"] = x_i;
+
+						oss<<s_i;
+						jsdic["s_i"] = oss.str();
+						oss.str("");
+
+						string msg = jsdic.dump();
+						send(msg);
 					}
 					break;
 					case 3:
 					{
+						
 					
 					}
 					break;
@@ -221,8 +249,7 @@ private:
 	Integer per_commit_secret;
 	Integer revocation_prikey_piece;
 
-	Integer revocation_hash_e;
-	Integer revocation_pubkey;
+	string revocation_pubkey;
 };
 
 int main(int argc, char **argv)

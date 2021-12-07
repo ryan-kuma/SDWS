@@ -75,6 +75,12 @@ int main(int argc, char *argv[])
 	Element revocationpubkey_point = group.GetCurve().Add(v1,v2);
 	Integer revocationprikey = revocation_secret * num_hash_revocation_percommit + per_commit_secret * num_hash_percommit_revocation;
 
+	revocationprikey = revocationprikey % n;
+	
+	Element revocationprikey_point = group.ExponentiateBase(revocationprikey);
+	cout<<revocationpubkey_point.x<<endl;
+	cout<<revocationprikey_point.x<<endl;
+
 	return 0;
 }
 
