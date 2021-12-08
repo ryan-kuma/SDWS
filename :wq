@@ -213,6 +213,10 @@ private:
 						jsdic["s_i"] = oss.str();
 						oss.str("");
 
+			oss<<r_i;
+			jsdic["r_i"] = oss.str();
+			oss.str("");
+
 						string msg = jsdic.dump();
 						send(msg);
 					}

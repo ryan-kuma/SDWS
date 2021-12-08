@@ -184,7 +184,6 @@ private:
 				buf->retrieve(sizeof(int32_t));
 				muduo::string message(buf->peek(), len);
 				buf->retrieve(len);
-cout<<"message="<<message<<endl;				
 
 				nlohmann::json j = nlohmann::json::parse(message);	
 				int type = j["type"];
@@ -253,10 +252,11 @@ cout<<"message="<<message<<endl;
 							StringSource s1(str_R_sum + str_revocation_pubkey_point_x + str_rtx, true, new HashFilter(hash, new HexEncoder(new StringSink(str_hash_e))));
 
 							hash_e = Integer(str_hash_e.c_str()); 
+
 							for (int j = 1; j < piece_k; j++)
 							{ 
 								int x_i = vec_x[j];
-								Integer revocation_piece(revocation_secret_piece[x_i].c_str());
+								Integer revocation_piece(revocation_secret_piece[j].c_str());
 								Integer revocation_pri_piece = revocation_piece * num_hash_revocation_percommit;
 								
 								Integer mul_piece = revocation_pri_piece;
@@ -272,7 +272,8 @@ cout<<"message="<<message<<endl;
 								
 								}
 								mul_piece = mul_piece / mul_dens;
-								Integer s_j = vec_ri[x_i] + (hash_e * mul_piece) % maxp;
+
+								Integer s_j = vec_ri[j] + (hash_e * mul_piece) % maxp;
 								vec_sj[j] = s_j;
 							}
 
@@ -283,16 +284,21 @@ cout<<"message="<<message<<endl;
 
 					case 2:
 					{
-						int xi = j["x_i"].get<int>();
+						int xi = j["xi"].get<int>();
 						string str_si = j["s_i"].get<string>();
 						Integer si(str_si.c_str());
 
 						Integer sum_s = si; 
 						for (int i = 1; i < piece_k; i++)
+						{
 							sum_s = sum_s + vec_sj[i];
+						}
 
-						sum_s = sum_s % maxp;
-						Integer res_s = sum_s + hash_e * per_commit_secret *  num_hash_percommit_revocation;
+						Integer res_s = (sum_s + hash_e * per_commit_secret *  num_hash_percommit_revocation) % maxp;
+
+
+						//verify the sign
+						verify_sign(res_s);
 						cout<<"-----------------------------end-------------------------"<<endl;
 						cout<<"res_s="<<res_s<<endl;
 					}
@@ -309,6 +315,18 @@ cout<<"message="<<message<<endl;
 			}
 		}
 		
+	}
+
+	void verify_sign(Integer &res)
+	{
+		Element res_point = group.ExponentiateBase(res);
+
+		Element point_right = group.GetCurve().ScalarMultiply(revocation_pubkey_point, hash_e);
+		Element hash_point = group.GetCurve().Add(R_sum, point_right);
+
+cout<<"------------------verify--------------------"<<endl;
+		cout<<"hash_point="<<hash_point.x<<endl;
+		cout<<" res_point="<<res_point.x<<endl;
 	}
 
 	bool processRequest(const TcpConnectionPtr& conn, const string& request)
