@@ -1,3 +1,6 @@
 [submodule "shamir/sss"]
 	path = shamir/sss
 	url = git@github.com:dsprenkels/sss.git
+[submodule "cryptopp"]
+	path = cryptopp
+	url = git@github.com:weidai11/cryptopp.git

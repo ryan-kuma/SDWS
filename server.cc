@@ -22,6 +22,8 @@
 #include <string>
 #include <iostream>
 
+#include <sys/time.h>
+
 
 using namespace muduo;
 using namespace muduo::net;
@@ -30,6 +32,18 @@ using namespace std;
 
 typedef DL_GroupParameters_EC<ECP> GroupParameters;
 typedef DL_GroupParameters_EC<ECP>::Element Element;
+
+//给每个瞭望塔分发revocation_secret分片
+static int64_t start_piece_time;
+static int64_t end_piece_time;
+
+//leader生成rtx并发送给每个瞭望塔
+static int64_t start_rtx_time;
+static int64_t end_rtx_time;
+
+//leader接收sj并聚合生成s
+static int64_t start_s_time;
+static int64_t end_s_time;
 
 class Server
 {
@@ -141,8 +155,22 @@ private:
 //send revocation_point_x, x_i, revocation_secret_piece and per_commit_secret when client connected
 	void onConnection(const TcpConnectionPtr& conn)
 	{
+		if (!conn->connected()) {
+			conn->shutdown();
+			return ;
+		}
+
 		nlohmann::json jsdic;
 		jsdic["type"] = 1;
+
+		/*
+		struct timeval tv;
+		gettimeofday(&tv, NULL);
+		int64_t seconds = tv.tv_sec;
+		start_piece_time = seconds * 1000 * 1000 + tv.tv_usec;
+		printf("-------------------when connect start send secret piece-----------------------\n");
+		printf("start_time:%ldus\n", start_piece_time);
+		*/
 
 		ostringstream oss("");
 		oss<<revocation_point.x;
@@ -162,6 +190,16 @@ private:
 		jsdic["rpubkey_x"] = str_revocation_pubkey_point_x;
 
 		string msg = jsdic.dump();
+
+		//record time
+		struct timeval tv;
+		gettimeofday(&tv, NULL);
+		int64_t seconds = tv.tv_sec;
+		end_piece_time = seconds * 1000 * 1000 + tv.tv_usec;
+
+		printf("end_time:%ldus\n", end_piece_time);
+		printf("cost_time:%ldus\n", end_piece_time - start_piece_time);
+		printf("-------------------end send secret piece-----------------------\n");
 
 		//send msg
 		processRequest(conn, msg);
@@ -193,6 +231,15 @@ private:
 					//send rtx
 					case 1:
 					{
+						/*
+						struct timeval tv;
+						gettimeofday(&tv, NULL);
+						int64_t seconds = tv.tv_sec;
+						start_rtx_time = seconds * 1000 * 1000 + tv.tv_usec;
+						printf("-------------------start send rtx-----------------------\n");
+						printf("start_time:%ldus\n", start_rtx_time);
+						*/
+
 						//store array of xi and Sum of Ri
 						if (static_cast<int>(vec_x.size()) < piece_k) 
 						{
@@ -240,6 +287,21 @@ private:
 							string msg = jsdic.dump();
 							processRequest(conn, msg);
 
+							/* 
+							gettimeofday(&tv, NULL);
+							seconds = tv.tv_sec;
+							end_rtx_time = seconds * 1000 * 1000 + tv.tv_usec;
+							printf(" end_time:%ldus\n", end_rtx_time);
+							printf("cost_time:%ldus\n", end_rtx_time - start_rtx_time);
+							printf("-------------------end send rtx-----------------------\n");
+							*/
+
+							/*
+							printf("-------------------start simulate-----------------------\n");
+							gettimeofday(&tv, NULL);
+							seconds = tv.tv_sec;
+							int64_t start_simulate_time = seconds * 1000 * 1000 + tv.tv_usec;
+							*/
 
 							//simulate generate sj-----------------------------
 							SHA256 hash;
@@ -276,14 +338,31 @@ private:
 								Integer s_j = vec_ri[j] + (hash_e * mul_piece) % maxp;
 								vec_sj[j] = s_j;
 							}
+						/*
+						gettimeofday(&tv, NULL);
+						seconds = tv.tv_sec;
+						int64_t end_simulate_time = seconds * 1000 * 1000 + tv.tv_usec;
+						printf("cost_time:%ldus\n", end_simulate_time - start_simulate_time);
+						printf("-----------------------------end simulate--------------------\n");
+						*/
 
-							vec_x.clear();
+													vec_x.clear();
 						}
 					}
 					break;
 
 					case 2:
 					{
+
+						/*
+						struct timeval tv;
+						gettimeofday(&tv, NULL);
+						int64_t seconds = tv.tv_sec;
+						start_s_time = seconds * 1000 * 1000 + tv.tv_usec;
+						printf("-------------------start generate s-----------------------\n");
+						printf("start_time:%ldus\n", start_s_time);
+						*/
+
 						int xi = j["xi"].get<int>();
 						string str_si = j["s_i"].get<string>();
 						Integer si(str_si.c_str());
@@ -297,10 +376,19 @@ private:
 						Integer res_s = (sum_s + hash_e * per_commit_secret *  num_hash_percommit_revocation) % maxp;
 
 
+						struct timeval tv;
+						gettimeofday(&tv, NULL);
+						int64_t seconds = tv.tv_sec;
+						end_s_time = seconds * 1000 * 1000 + tv.tv_usec;
+//						printf(" end_time:%ldus\n", end_s_time);
+//						printf("cost_time:%ldus\n", end_s_time - start_s_time);
+						printf("all cost:%ldus\n", end_s_time - end_piece_time);
+//						printf("-------------------end generate s-----------------------\n");
+
 						//verify the sign
 						verify_sign(res_s);
-						cout<<"-----------------------------end-------------------------"<<endl;
 						cout<<"res_s="<<res_s<<endl;
+						cout<<"-----------------------------end-------------------------"<<endl;
 					}
 					break;
 					default:

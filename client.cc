@@ -1,6 +1,7 @@
 #include "muduo/base/Logging.h"
 #include "muduo/base/Atomic.h"
 #include "muduo/net/EventLoop.h"
+#include "muduo/net/EventLoopThread.h"
 #include "muduo/net/TcpClient.h"
 
 #include "cryptopp/integer.h"
@@ -35,7 +36,7 @@ public:
 			const InetAddress& srvaddr,
 			const string& name,
 			bool nodelay)
-		: name_(name),
+		: loop_(loop),name_(name),
 		tcpNoDelay_(nodelay),
 		client_(loop, srvaddr, name_),
 		maxp("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141")
@@ -66,6 +67,8 @@ private:
 		else 
 		{
 			conn_.reset();
+			cout<<"--------------end---------------"<<endl;
+			loop_->quit();
 		}
 	
 	}
@@ -124,11 +127,11 @@ private:
 						this->per_commit_secret = Integer(str_per_commit_secret.c_str());
 						this->revocation_pubkey = str_revocationpubkey;
 
-						cout<<"rpointx="<<revocation_point_x<<endl;
-						cout<<"psecret="<<per_commit_secret<<endl;
-						cout<<"xi="<<x_i<<endl;
-						cout<<"rpiece="<<revocation_secret_piece<<endl;
-						cout<<"rpubkey="<<revocation_pubkey<<endl;
+//						cout<<"rpointx="<<revocation_point_x<<endl;
+//						cout<<"psecret="<<per_commit_secret<<endl;
+//						cout<<"xi="<<x_i<<endl;
+//						cout<<"rpiece="<<revocation_secret_piece<<endl;
+//						cout<<"rpubkey="<<revocation_pubkey<<endl;
 
 						AutoSeededRandomPool prng;
 						
@@ -187,7 +190,6 @@ private:
 
 						Integer revocation_hash_e(str_revocation_hash_e.c_str());
 
-			cout<<"hash_e="<<revocation_hash_e<<endl;
 
 						//generate s_j = r_j + e * RRri_j * multi(x_k/(x_k-x_j))
 						Integer mul_piece = revocation_pri_piece;
@@ -215,8 +217,9 @@ private:
 
 						string msg = jsdic.dump();
 						send(msg);
+
+						conn->shutdown();
 					}
-				conn->shutdown();
 					break;
 					default:
 					break;
@@ -231,6 +234,7 @@ private:
 		}
 	}
 
+	EventLoop* loop_;
 	const string name_;
 	const bool tcpNoDelay_;
 	TcpClient client_;
@@ -259,9 +263,12 @@ int main(int argc, char **argv)
 		InetAddress srvaddr(argv[1], port);
 
 		EventLoop loop;
-		Client *client = new Client(&loop, srvaddr, "client", nodelay);
-		client->connect();
+
+		Client client(&loop, srvaddr, "client", nodelay);
+		client.connect();
 		
+//		CurrentThread::sleepUsec(2000 * 1000);
+//		client->disconnect();
 		loop.loop();
 	}
 	else
