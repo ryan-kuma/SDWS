@@ -45,6 +45,9 @@ static int64_t end_rtx_time;
 static int64_t start_s_time;
 static int64_t end_s_time;
 
+static int64_t sum_cost_time;
+static int64_t conn_count;
+
 class Server
 {
 public:
@@ -197,9 +200,9 @@ private:
 		int64_t seconds = tv.tv_sec;
 		end_piece_time = seconds * 1000 * 1000 + tv.tv_usec;
 
-		printf("end_time:%ldus\n", end_piece_time);
-		printf("cost_time:%ldus\n", end_piece_time - start_piece_time);
-		printf("-------------------end send secret piece-----------------------\n");
+//		printf("end_time:%ldus\n", end_piece_time);
+//		printf("cost_time:%ldus\n", end_piece_time - start_piece_time);
+//		printf("-------------------end send secret piece-----------------------\n");
 
 		//send msg
 		processRequest(conn, msg);
@@ -382,13 +385,20 @@ private:
 						end_s_time = seconds * 1000 * 1000 + tv.tv_usec;
 //						printf(" end_time:%ldus\n", end_s_time);
 //						printf("cost_time:%ldus\n", end_s_time - start_s_time);
-						printf("all cost:%ldus\n", end_s_time - end_piece_time);
+//						printf("all cost:%ldus\n", end_s_time - end_piece_time);
+						sum_cost_time = sum_cost_time + (end_s_time - end_piece_time);
+						if (conn_count < 1000)
+							conn_count++;
+						else {
+							printf("avg_cost_time=%ldus\n", sum_cost_time/conn_count);
+							conn_count = 1;
+						}
 //						printf("-------------------end generate s-----------------------\n");
 
 						//verify the sign
 						verify_sign(res_s);
-						cout<<"res_s="<<res_s<<endl;
-						cout<<"-----------------------------end-------------------------"<<endl;
+//						cout<<"res_s="<<res_s<<endl;
+						cout<<"-----------------------------"<<conn_count-1<<"-------------------------"<<endl;
 					}
 					break;
 					default:
@@ -412,9 +422,12 @@ private:
 		Element point_right = group.GetCurve().ScalarMultiply(revocation_pubkey_point, hash_e);
 		Element hash_point = group.GetCurve().Add(R_sum, point_right);
 
-cout<<"------------------verify--------------------"<<endl;
-		cout<<"hash_point="<<hash_point.x<<endl;
-		cout<<" res_point="<<res_point.x<<endl;
+		if (hash_point.x.Compare(res_point.x) != 0)
+			cout<<"!!!!!!!!!!!!!error!!!!!!!!!!!!!"<<endl;
+
+//cout<<"------------------verify--------------------"<<endl;
+//		cout<<"hash_point="<<hash_point.x<<endl;
+//		cout<<" res_point="<<res_point.x<<endl;
 	}
 
 	bool processRequest(const TcpConnectionPtr& conn, const string& request)
@@ -469,6 +482,11 @@ int main(int argc, char **argv)
 		int piece_k = static_cast<int>(atoi(argv[3]));
 
 //		port=12358; //default port
+
+		
+		conn_count = 1;
+		sum_cost_time = 0;
+
 		InetAddress listenAddr(port);
 		Server srv(&loop, listenAddr, piece_n, piece_k);
 
