@@ -67,7 +67,7 @@ private:
 		else 
 		{
 			conn_.reset();
-			cout<<"--------------end---------------"<<endl;
+//			cout<<"--------------end---------------"<<endl;
 			loop_->quit();
 		}
 	
@@ -253,8 +253,12 @@ private:
 	string revocation_pubkey;
 };
 
+void logNullOutput(const char *msg, int len)
+{}
+
 int main(int argc, char **argv)
 {
+	muduo::Logger::setOutput(logNullOutput);
 	if (argc > 2)
 	{
 		bool nodelay = true;

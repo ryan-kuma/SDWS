@@ -3,6 +3,7 @@
 #include "muduo/net/EventLoop.h"
 #include "muduo/net/InetAddress.h"
 #include "muduo/net/TcpServer.h"
+#include "muduo/base/Logging.h"
 
 #include "cryptopp/integer.h"
 #include "cryptopp/eccrypto.h"
@@ -24,6 +25,7 @@
 
 #include <sys/time.h>
 
+#define MAX_COUNT 100
 
 using namespace muduo;
 using namespace muduo::net;
@@ -45,7 +47,10 @@ static int64_t end_rtx_time;
 static int64_t start_s_time;
 static int64_t end_s_time;
 
+//测试max_count次的平均延迟
 static int64_t sum_cost_time;
+static int64_t sum_generate_piece_time;
+static int64_t sum_compute_cost_time;
 static int64_t conn_count;
 
 class Server
@@ -166,14 +171,13 @@ private:
 		nlohmann::json jsdic;
 		jsdic["type"] = 1;
 
-		/*
+		//start generate piece time
 		struct timeval tv;
 		gettimeofday(&tv, NULL);
 		int64_t seconds = tv.tv_sec;
 		start_piece_time = seconds * 1000 * 1000 + tv.tv_usec;
-		printf("-------------------when connect start send secret piece-----------------------\n");
-		printf("start_time:%ldus\n", start_piece_time);
-		*/
+//		printf("-------------------when connect start send secret piece-----------------------\n");
+//		printf("start_time:%ldus\n", start_piece_time);
 
 		ostringstream oss("");
 		oss<<revocation_point.x;
@@ -194,12 +198,12 @@ private:
 
 		string msg = jsdic.dump();
 
-		//record time
-		struct timeval tv;
+		//end generate piece time
 		gettimeofday(&tv, NULL);
-		int64_t seconds = tv.tv_sec;
+		seconds = tv.tv_sec;
 		end_piece_time = seconds * 1000 * 1000 + tv.tv_usec;
 
+		sum_generate_piece_time = sum_generate_piece_time + (end_piece_time - start_piece_time);
 //		printf("end_time:%ldus\n", end_piece_time);
 //		printf("cost_time:%ldus\n", end_piece_time - start_piece_time);
 //		printf("-------------------end send secret piece-----------------------\n");
@@ -387,10 +391,12 @@ private:
 //						printf("cost_time:%ldus\n", end_s_time - start_s_time);
 //						printf("all cost:%ldus\n", end_s_time - end_piece_time);
 						sum_cost_time = sum_cost_time + (end_s_time - end_piece_time);
-						if (conn_count < 1000)
+
+						cout<<"-----------------------------"<<conn_count<<"-------------------------"<<endl;
+						if (conn_count < MAX_COUNT)
 							conn_count++;
 						else {
-							printf("avg_cost_time=%ldus\n", sum_cost_time/conn_count);
+							printf("avg_cost_time=%ldus\n", sum_cost_time/MAX_COUNT);
 							conn_count = 1;
 						}
 //						printf("-------------------end generate s-----------------------\n");
@@ -398,7 +404,6 @@ private:
 						//verify the sign
 						verify_sign(res_s);
 //						cout<<"res_s="<<res_s<<endl;
-						cout<<"-----------------------------"<<conn_count-1<<"-------------------------"<<endl;
 					}
 					break;
 					default:
@@ -472,8 +477,12 @@ private:
 	vector<Integer> vec_sj;
 };
 
+void logNullOutput(const char *msg, int len)
+{}
+
 int main(int argc, char **argv)
 {
+	muduo::Logger::setOutput(logNullOutput);
 	if (argc > 3)
 	{
 		EventLoop loop;
@@ -486,6 +495,8 @@ int main(int argc, char **argv)
 		
 		conn_count = 1;
 		sum_cost_time = 0;
+		sum_generate_piece_time = 0;
+		sum_compute_cost_time = 0;
 
 		InetAddress listenAddr(port);
 		Server srv(&loop, listenAddr, piece_n, piece_k);
