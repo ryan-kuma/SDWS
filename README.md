@@ -39,3 +39,7 @@ using muduo for network and crypro++ for encryption and signature
 - ./client server_ip server_ip_port
 
   ./client 127.0.0.1 12358
+
+  or
+
+  ./test_100.sh
